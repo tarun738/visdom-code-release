@@ -1,0 +1,20 @@
+Config.exp_name = 'test'
+Config.dataset_loader = 'actorshq'
+Config.near = 0
+Config.far = 5
+Config.factor = 0
+Config.hash_decay_mults = 10
+Config.factor = 1
+Config.batch_size = 8192
+Config.earlystop = 6001
+Config.data_coarse_loss_mult = 0.1
+Model.raydist_fn = None
+Model.num_prop_samples = 24
+Model.num_nerf_samples = 64
+PropMLP.disable_density_normals = True
+PropMLP.disable_rgb = False
+PropMLP.grid_level_dim = 1
+
+PropMLP.deg_view = 1
+NerfMLP.disable_density_normals = True
+NerfMLP.deg_view = 1

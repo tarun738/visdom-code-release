@@ -1,0 +1,28 @@
+camtools
+einops
+lpips
+tensorboard
+tqdm
+transformers
+omegaconf
+open-clip-torch
+open3d
+opencv-python
+Pillow
+plyfile
+pytorch-lightning
+PyYAML
+ipykernel
+trimesh
+roma
+./submodules/diff-gaussian-rasterization
+#./submodules/diff-gaussian-rasterization-w-pose
+./submodules/simple-knn
+./submodules/pytorch3d
+./submodules/minLoRA
+./submodules/CLIP
+./submodules/segment-anything
+# TORCH_CUDA_ARCH_LIST="6.0 7.0 7.5 8.0 8.6 8.9+PTX"  pip install ./submodules/diff-gaussian-rasterization  --no-cache-dir --no-binary :all: --force-reinstall
+# TORCH_CUDA_ARCH_LIST="6.0 7.0 7.5 8.0 8.6 8.9+PTX"  pip install ./submodules/simple-knn  --no-cache-dir --no-binary :all: --force-reinstall
+# TORCH_CUDA_ARCH_LIST="6.0 7.0 7.5 8.0 8.6 8.9+PTX"  pip install ./submodules/CLIP  --no-cache-dir --no-binary :all: --force-reinstall
+# TORCH_CUDA_ARCH_LIST="6.0 7.0 7.5 8.0 8.6 8.9+PTX"  pip install ./submodules/segment-anything  --no-cache-dir --no-binary :all: --force-reinstall
