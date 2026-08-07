@@ -1,4 +1,5 @@
 # VisDom: Sparse Novel View Synthesis with Visible Domain Constraint
+## $\color{red}{\text{Accepted to GCPR}}$
 
 Code release for our GCPR 2026 paper. Two pipelines:
 
@@ -85,8 +86,6 @@ python datasets/conf_to_sparse_splits.py datasets/dataset_splits/exp_acthq_Actor
 (verified to reproduce the exact same camera sets as the reference `sparse_N.txt`/`sparse_test.txt` files, for both the ActorsHQ and Mip-NeRF 360 splits — order and trailing newline can differ, the selected cameras don't.)
 
 ## Citation
-
-Accepted to GCPR 2026. The camera-ready citation isn't available yet — please cite the arXiv version for now; we'll update this with the proceedings BibTeX once it's out.
 
 If you use this code or these datasets, please consider citing our work as well as the datasets and codebases it builds on:
 
