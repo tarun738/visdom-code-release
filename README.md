@@ -1,7 +1,7 @@
 # VisDom: Sparse Novel View Synthesis with Visible Domain Constraint
 ## $\color{red}{\text{Accepted to GCPR}}$
 
-Code release for our GCPR 2026 paper. Two pipelines:
+Code release for our paper. Two pipelines:
 
 - **[`zipnerf/`](zipnerf/README.md)** — Zip-NeRF-based reconstruction. See [`zipnerf/README.md`](zipnerf/README.md) for install + how to reproduce our results.
 - **[`3dgs-go/`](3dgs-go/README.md)** — 3D Gaussian Splatting-based reconstruction. See [`3dgs-go/README.md`](3dgs-go/README.md) for install + how to reproduce our results.
