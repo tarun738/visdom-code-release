@@ -30,8 +30,7 @@ from gaussian_renderer import GaussianModel, render, render_w_pose
 import lpips
 from scene import Scene
 from utils.general_utils import safe_state
-from utils.image_utils import psnr
-from utils.loss_utils import ssim
+from utils.image_utils import psnr, ssim_metric
 from utils.graphics_utils import focal2fov, fov2focal, getProjectionMatrix
 from scene.cameras import Camera
 from utils.pose_utils import get_loss_tracking, update_pose
@@ -87,7 +86,7 @@ def evaluate(model_paths):
                 render = renders[idx].cuda()
                 gt = gts[idx].cuda()
 
-                ssims.append(ssim(render, gt))
+                ssims.append(ssim_metric(render, gt))
                 psnrs.append(psnr(render, gt))
                 lpipss.append(lpips_fn(render, gt))
 
@@ -164,7 +163,7 @@ def render_set(model_path, name, iteration, views: List[Camera], gaussians, pipe
         rendering = torch.clamp(render_pkg["render"], 0.0, 1.0)
         depths.append(render_pkg["rendered_depth"].detach().cpu().numpy()[0])
         gt = view.original_image[0:3, :, :]
-        ssims += ssim(rendering, gt).mean().item()
+        ssims += ssim_metric(rendering, gt)
         psnrs += psnr(rendering, gt).mean().item()
         lpipss += lpips_fn(rendering, gt).item() # NCHW
         if save_images:
@@ -225,8 +224,6 @@ def render_set(model_path, name, iteration, views: List[Camera], gaussians, pipe
         os.remove(gt_path)
 
         # use opencv generate depth video
-        # import pdb
-        # pdb.set_trace()
         depth_path = os.path.join(model_path, name, "ours_{}".format(iteration), "depth.mp4")
         depth_video = cv2.VideoWriter(depth_path, cv2.VideoWriter_fourcc(*'mp4v'), 24, (depths[0].shape[1], depths[0].shape[0]), False)
         for depth in depths:

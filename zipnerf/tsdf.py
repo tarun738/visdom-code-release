@@ -326,12 +326,10 @@ def main(unused_argv):
     for rgb_file, depth_file in zip(tqdm(rgb_files, disable=not accelerator.is_main_process), depth_files):
         color_images.append(utils.load_img(rgb_file) / 255)
         depth_images.append(utils.load_img(depth_file)[..., None])
-    # import pdb; pdb.set_trace()
     # color_images = torch.tensor(np.array(color_images), device=device).permute(0, 3, 1, 2)  # shape (N, 3, H, W)
     # depth_images = torch.tensor(np.array(depth_images), device=device).permute(0, 3, 1, 2)  # shape (N, 1, H, W)
     color_images = [torch.tensor(color_images[i]).permute(2,0,1) for i in range(len(color_images))]
     depth_images = [torch.tensor(depth_images[i]).permute(2,0,1) for i in range(len(depth_images))]
-    # import pdb; pdb.set_trace()
     batch_size = 1
     logger.info("Integrating the TSDF")
     for i in tqdm(range(0, len(c2w), batch_size), disable=not accelerator.is_main_process):

@@ -1,4 +1,4 @@
-DATA_DIR=<path to dataset>
+DATA_DIR="<path to dataset>"   # edit me
 
 # 004_00: (earlystop=6001). garden uses deg_view=4, kitchen/bonsai use 1.
 ./runone_vhull_4.sh mipnerf360/garden/004_00 4 $DATA_DIR

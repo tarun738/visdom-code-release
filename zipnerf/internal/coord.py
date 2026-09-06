@@ -108,7 +108,6 @@ def track_linearize(fn, mean, std):
     # mean_3, std_3 = contract_mean_std(mean, std)  # calculate det explicitly by using eigenvalues
     # torch.allclose(std_1, std_3, atol=1e-7)  # True
     # torch.allclose(mean_1, mean_3)  # True
-    # import ipdb; ipdb.set_trace()
     mean, std = contract_mean_std(mean, std)  # calculate det explicitly by using eigenvalues
 
     mean = mean.reshape(*pre_shape, 3)

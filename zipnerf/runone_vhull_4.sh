@@ -1,3 +1,5 @@
+#!/bin/bash
+set -e
 actvar=$1
 deg_view=${2:-1}
 data_dir=$3

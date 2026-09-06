@@ -489,7 +489,6 @@ def main(unused_argv):
     if config.decimate_target > 0 and faces.shape[0] > config.decimate_target:
         logger.info('Decimate mesh...')
         vertices, triangles = decimate_mesh(vertices, faces, config.decimate_target, logger=logger)
-    # import ipdb; ipdb.set_trace()
     if config.vertex_color:
         # batched inference to avoid OOM
         logger.info('Evaluate mesh vertex color...')

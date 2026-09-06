@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from internal import math
 from skimage.metrics import structural_similarity, peak_signal_noise_ratio
-import cv2
 
 
 def mse_to_psnr(mse):
@@ -99,7 +98,6 @@ def color_correct(img, ref, num_iters=5, eps=0.5 / 255):
             ma_mat = torch.where(mask[:, None], a_mat, torch.zeros_like(a_mat))
             mb = torch.where(mask, b, torch.zeros_like(b))
             w = torch.linalg.lstsq(ma_mat, mb, rcond=-1)[0]
-            import pdb; pdb.set_trace()
             assert torch.all(torch.isfinite(w))
             warp.append(w)
         warp = torch.stack(warp, dim=-1)
@@ -116,10 +114,12 @@ class MetricHarness:
         """Evaluate the error between a predicted rgb image and the true image."""
         rgb_pred = (rgb_pred * 255).astype(np.uint8)
         rgb_gt = (rgb_gt * 255).astype(np.uint8)
-        rgb_pred_gray = cv2.cvtColor(rgb_pred, cv2.COLOR_RGB2GRAY)
-        rgb_gt_gray = cv2.cvtColor(rgb_gt, cv2.COLOR_RGB2GRAY)
         psnr = float(peak_signal_noise_ratio(rgb_pred, rgb_gt, data_range=255))
-        ssim = float(structural_similarity(rgb_pred_gray, rgb_gt_gray, data_range=255))
+        # SSIM over RGB, averaged across channels, to match the 3dgs-go pipeline. This
+        # previously ran on a greyscale conversion, which made the two pipelines' SSIM
+        # columns non-comparable.
+        ssim = float(structural_similarity(rgb_pred, rgb_gt, data_range=255,
+                                           channel_axis=-1))
 
         return {
             name_fn('psnr'): psnr,

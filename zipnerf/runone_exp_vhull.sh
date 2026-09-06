@@ -1,3 +1,5 @@
+#!/bin/bash
+set -e
 actvar=$1
 data_dir=$2
 echo $actvar data_dir=$data_dir

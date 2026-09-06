@@ -79,7 +79,6 @@ def main(unused_argv):
     accelerate.utils.set_seed(config.seed, device_specific=True)
     # setup model and optimizer
     model = models.Model(config=config)
-    # import pdb; pdb.set_trace()
     optimizer, lr_fn = train_utils.create_optimizer(config, model)
 
     # load dataset
@@ -466,7 +465,6 @@ def main(unused_argv):
                     test_dataiter = iter(test_dataloader)
                     test_batch = next(test_dataiter)
                 test_batch = accelerate.utils.send_to_device(test_batch, accelerator.device)
-                # import pdb; pdb.set_trace()
                 # render a single image with all distributed processes
                 rendering = models.render_image(model, accelerator,
                                                 test_batch, False,

@@ -5,12 +5,7 @@
 #   GaussianObject/run_mip_vd.sh, GaussianObject/run_omni_vd.sh, GOActHQ/run_act_vd.sh
 # reduced to the first stage only (no leave-one-out / LoRA fine-tuning / Gaussian repair).
 #
-# Note on --vd_K: GaussianObject/run_mip_vd.sh threads a --vd_K/--vd_k arg through
-# visual_hull.py/train_gs.py, but its own driver (batch_mip.py) never actually supplies
-# it, and this codebase (ported from GOActHQ, which never had --vd_K at all) doesn't
-# support that flag. The plain (K-less) visible-domain visual hull below is what the
-# reference results were actually produced with (confirmed by comparing point counts of
-# the saved training input.ply against each visual_hull_*_vd*.ply candidate).
+# --vd_K is left unset below, so visual_hull.py uses its default K of (views - 1).
 set -e
 
 views=$1

@@ -16,13 +16,6 @@ pip install ./gridencoder
 pip install ./nvdiffrast  # optional, for textured mesh
 ```
 
-Some code paths (`internal/compnormals.py`) also depend on the vendored
-[surface_normal_uncertainty](https://github.com/baegwangbin/surface_normal_uncertainty) model under
-`pretrained/surface_normal_uncertainty/`. The source code ships with this repo, but the checkpoint
-(`checkpoints/nyu.pt`) is too large for git — download it from the
-[original repo's Google Drive link](https://drive.google.com/drive/folders/1Ku25Am69h_HrbtcCptXn4aetjo7sB33F)
-and place it at `pretrained/surface_normal_uncertainty/checkpoints/nyu.pt`.
-
 ## Reproducing our results
 
 Sparse-view camera splits (which cameras go into train/val per scene) live in `../datasets/dataset_splits/`,

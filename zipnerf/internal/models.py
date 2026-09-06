@@ -57,7 +57,6 @@ class Model(nn.Module):
         super().__init__()
         set_kwargs(self, kwargs)
         self.config = config
-        # import pdb; pdb.set_trace()
         # Construct MLPs. WARNING: Construction order may matter, if MLP weights are
         # being regularized.
         self.nerf_mlp = NerfMLP(num_glo_features=self.num_glo_features,
@@ -196,7 +195,6 @@ class Model(nn.Module):
 
             # Convert normalized distances to metric distances.
             tdist = s_to_t(sdist)
-            # import pdb; pdb.set_trace()
             # Cast our rays, by turning our distance intervals into Gaussians.
             means, stds, ts = render.cast_rays(
                 tdist,

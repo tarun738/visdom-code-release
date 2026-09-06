@@ -160,7 +160,6 @@ def main(unused_argv):
             gt_rgb = batch['rgb']
             # gt_mask = batch['mask']
             # rendering['rgb'][gt_mask == 0,...] = 1.0
-            # import pdb; pdb.set_trace()
             # logger.info(f'Color corrected in {(time.time() - cc_start_time):0.3f}s')
 
             if not config.eval_only_once and idx in showcase_indices:

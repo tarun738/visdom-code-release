@@ -1,6 +1,7 @@
 import abc
 import copy
 import json
+import time
 import os
 from pathlib import Path
 import cv2
@@ -23,7 +24,6 @@ sys.path.insert(0, 'internal/pycolmap/pycolmap')
 import pycolmap
 import skimage
 import trimesh
-from internal import compnormals
 
 def load_dataset(split, train_dir, config: configs.Config):
     """Loads a split of a dataset using the data_loader specified by `config`."""
@@ -316,7 +316,6 @@ class Dataset(torch.utils.data.Dataset):
         # self._next_train(0)
         # self.generate_ray_batch(0)
         # if not self.split == utils.DataSplit.TRAIN:
-        #     import pdb; pdb.set_trace()
         #     restest = [self._next_fn(i) for i in range(self._n_examples)]
 
     @property
@@ -614,7 +613,7 @@ def computeNearFar(mesh,masks, intrinsics, image_dims, poses, choose_poses = Non
         intrinsic = torch.from_numpy(intrinsics[poseidx]).float()
         img_dims = image_dims[poseidx]
         pose = torch.from_numpy(poses[poseidx]).float()
-        i,j = torch.meshgrid(torch.arange(img_dims[0]), torch.arange(img_dims[1]))
+        i,j = torch.meshgrid(torch.arange(img_dims[0]), torch.arange(img_dims[1]), indexing='ij')
         zs = torch.ones_like(i)
         points = torch.stack((i, j, zs), dim=-1).to(dtype=torch.float32)
         directions = points @ intrinsic.inverse().transpose(1, 0)
@@ -644,7 +643,6 @@ def computeNearFar(mesh,masks, intrinsics, image_dims, poses, choose_poses = Non
             fars[iIdxs,0] = iDists + epsilon
         else:
             iLocs, iIdxs , _ = intersector.intersects_location(rays_o, rays_d, multiple_hits=False)
-            # visualize_poses(poses, mesh = mesh)
             
             iDists = torch.norm(torch.from_numpy(iLocs) - rays_o[iIdxs], dim=-1).float()
             nears = -1*torch.ones_like(torch.tensor(rays_o[:,-1])).unsqueeze(-1)
@@ -652,40 +650,9 @@ def computeNearFar(mesh,masks, intrinsics, image_dims, poses, choose_poses = Non
             fars = nears.clone()
             fars[iIdxs,0]  = iDists + epsilon
 
-            # nears[iIdxs,0] = iDists  - epsilon
-            # fars = nears.clone()
-            # fars[iIdxs,0]  = iDists + 2*epsilon
 
-
-            # iLocs, iIdxs , _ = intersector.intersects_location(rays_o + 10*rays_d, -rays_d, multiple_hits=False)
-            
-            # iDists = torch.norm(torch.from_numpy(iLocs) - rays_o[iIdxs], dim=-1).float()
-
-            
-            # fars = -1*torch.ones_like(torch.tensor(rays_o[:,-1])).unsqueeze(-1)
-            # fars[iIdxs,0] = iDists
-            # import pdb; pdb.set_trace()
-
-        # nears = -1*torch.ones_like(torch.tensor(rays_o[:,-1])).unsqueeze(-1)
-        # nears[iIdxs] = torch.tensor(iDists).float().unsqueeze(-1) - epsilon
-        # fars = nears.clone() + 2*epsilon
         nears_curr = nears.reshape(int(img_dims[0]),int(img_dims[1])).transpose(0,1)
         fars_curr = fars.reshape(int(img_dims[0]),int(img_dims[1])).transpose(0,1)
-        # import pdb; pdb.set_trace()
-        # nears_curr, fars_curr = self.filterPixels(nears_curr,fars_curr,masks[poseidx])
-        # img = np.ones((int(intrinsics[5]),int(intrinsics[4])))*0
-        # img = img.reshape(-1,1)
-        # img[iIdxs] = 255.0
-        # img = img.reshape(int(intrinsics[4]),int(intrinsics[5])).transpose(1,0)
-        # cv2.imshow(str(poseidx),img)
-        # cv2.imwrite("testmask.png",img.astype('uint8'))
-        # cv2.imwrite("testmaskgt.png",masks[poseidx].astype('uint8'))
-
-
-        # imgvis = np.ones((int(intrinsics[5]),int(intrinsics[4])))*0
-        # imgvis[fars_curr == -1] = 255.0
-        # imgvis[np.where(masks[poseidx]==0)] = 0
-        # cv2.imwrite("shittypixels1.png",imgvis.astype('uint8'))
         nearsDict[poseidx] = nears_curr.numpy()
         farsDict[poseidx] = fars_curr.numpy()
     if path is not None:
@@ -713,7 +680,6 @@ def visualize_poses(poses, size=0.1, bound=2, mesh=None, segcolors=None):
 
         segs = np.array([[pos, a], [pos, b], [pos, c], [pos, d], [a, b], [b, c], [c, d], [d, a], [pos, o]])
         segs = trimesh.load_path(segs)
-        # import pdb; pdb.set_trace()
         if segcolors is not None:
             for e in segs.entities:
                 e.color = [segcolors[i][0],segcolors[i][1],segcolors[i][2],255]
@@ -725,13 +691,57 @@ def visualize_poses(poses, size=0.1, bound=2, mesh=None, segcolors=None):
 
     trimesh.Scene(objects).show(viewer='gl')
     return trimesh.Scene(objects)
-def computeVisualHull(masks, poses, bound, intrinsics, image_dims, outpath, min_views_visual_hull=2,config=None):
-    
-    res = 512 #256
+# Masks are stored as 8-bit images; anything above this counts as foreground. Well clear
+# of both 0 and 255, so it tolerates compression artefacts at the silhouette boundary.
+MASK_THRESHOLD = 200.0
+
+# Below this many occupied voxels the hull is not a surface: marching cubes either fails
+# outright or returns a shell too small for the near/far bounds to mean anything.
+MIN_HULL_VOXELS = 100
+
+
+def vhull_cache_key(config):
+    """Every config field that changes the carved hull or the near/far bounds derived
+    from it. Cached artefacts are keyed on this so a K ablation cannot silently reuse
+    a hull built at a different K."""
+    return {k: getattr(config, k) for k in (
+        'vhull', 'vhull_vanilla', 'vhull_unitsph', 'vhull_scc', 'vhull_onlyvd',
+        'vhullK', 'vhull_occ_ratio', 'vhull_res', 'vhull_bound',
+        'mask_dilate', 'vaxnerf')}
+
+
+def vhull_cache_is_valid(cache_path, config):
+    """True when a sidecar exists next to the cached hull and records the same settings."""
+    if not os.path.isfile(cache_path):
+        return False
+    try:
+        with open(cache_path) as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        return False
+    want = vhull_cache_key(config)
+    changed = [k for k in want if saved.get(k) != want[k]]
+    if changed:
+        print(f"Visual hull cache is stale, recomputing. Changed: "
+              + ", ".join(f"{k}: {saved.get(k)} -> {want[k]}" for k in changed))
+        return False
+    return True
+
+
+def write_vhull_cache_key(cache_path, config):
+    with open(cache_path, 'w') as f:
+        json.dump(vhull_cache_key(config), f, indent=2)
+
+
+def computeVisualHull(masks, poses, bound, intrinsics, image_dims, outpath, min_views_visual_hull=2, config=None):
+
+    t_start = time.time()
+    res = config.vhull_res
+    bound = config.vhull_bound if config.vhull_bound > 0 else bound
     x = torch.linspace(-bound, bound, res)
     y = torch.linspace(-bound, bound, res)
     z = torch.linspace(-bound, bound, res)
-    xv, yv, zv = torch.meshgrid(x, y, z)
+    xv, yv, zv = torch.meshgrid(x, y, z, indexing='ij')
     pts = torch.stack((xv, yv, zv, torch.ones_like(xv)), dim=-1).view((-1, 4)).T
     # occupancy = torch.ones_like(xv).view(-1)
     # visibility = torch.ones_like(xv).view(-1)
@@ -743,7 +753,6 @@ def computeVisualHull(masks, poses, bound, intrinsics, image_dims, outpath, min_
     pts_mask = torch.norm(pts[:3, :], dim=0) <= 1.0
     intrinsics = torch.from_numpy(intrinsics).float()
     for intrinsic, image_dim, pose, mask in zip(intrinsics, image_dims, poses, masks):
-        # import pdb; pdb.set_trace()
         count += 1
         K = intrinsic
         pts_cam = torch.matmul(pose.inverse(), pts)[:-1, :]
@@ -751,7 +760,6 @@ def computeVisualHull(masks, poses, bound, intrinsics, image_dims, outpath, min_
         pts_img = torch.matmul(K, pts_cam) / pts_cam[2, :]
         pts_img = torch.round(pts_img).long()
         pts_idx = (pts_cam[2, :] > 0) & (pts_img[0,:]>=0) & (pts_img[0,:] < image_dim[0]) & (pts_img[1,:]>=0) & (pts_img[1,:] < image_dim[1]) & pts_mask_negDepth
-        # import pdb; pdb.set_trace()
         if config.vaxnerf:
             print("Using Vaxnerf style mask")
             maskscurrent =  cv2.dilate(mask.astype(np.uint8), np.ones((7,7)), iterations=1)
@@ -771,27 +779,41 @@ def computeVisualHull(masks, poses, bound, intrinsics, image_dims, outpath, min_
     # vhull_vanilla: bool = False  # If True, use visual hull for nears and fars
     # vhull_unitsph: bool = False  # If True, use visual hull for nears and fars
     # vhull_scc: bool = False  # If True, use visual hull for nears and fars
-    if config is not None:
-        ourvhull = config.vhull
-        ourvhull = ourvhull & (not config.vhull_vanilla) & (not config.vhull_unitsph)
-        unitspherecull = config.vhull_unitsph
-        scc = config.vhull_scc
-    else:
-        ourvhull = True
-        unitspherecull = False
-        scc = config.vhull_scc
+    # config is required: every branch below, and the mask handling above, reads it.
+    ourvhull = config.vhull and not config.vhull_vanilla and not config.vhull_unitsph
+    unitspherecull = config.vhull_unitsph
+    scc = config.vhull_scc
     if not ourvhull:
         occupancy = (occupancy > 0) & (occupancy >= visibility)
         if unitspherecull:
             occupancy = occupancy & pts_mask
     else:
+        # A voxel is kept only if at least K views observe it, capped at the number of
+        # training views.
+        min_views = min(poses.shape[0], min_views_visual_hull)
+        visible_enough = visibility >= min_views
         if config.vhull_onlyvd:
-            occupancy  = (visibility>min(poses.shape[0]-1, min_views_visual_hull)) 
+            occupancy = visible_enough
         else:
-            occupancy  = (visibility>min(poses.shape[0]-1, min_views_visual_hull)) & (occupancy == visibility)
+            # Occupancy votes must reach a fraction of the visibility votes. occupancy is
+            # incremented only where visibility is, so occupancy <= visibility always and
+            # a ratio of 1.0 is exactly the previous `occupancy == visibility`.
+            occupancy = visible_enough & (occupancy >= config.vhull_occ_ratio * visibility)
     
 
+    t_carve = time.time() - t_start
+    n_occupied = int(occupancy.sum())
+    if n_occupied < MIN_HULL_VOXELS:
+        raise ValueError(
+            f"Visual hull carved only {n_occupied} voxels out of {res}**3, below the "
+            f"minimum of {MIN_HULL_VOXELS}. The carving grid is a box of half-extent "
+            f"{bound} centred on the world origin, and nothing rescales the scene into "
+            "it, so this usually means the poses are in units the box does not cover. "
+            "Check Config.vhull_bound, and that the masks are non-empty.")
     verts, faces, normals, values = skimage.measure.marching_cubes(occupancy.float().numpy().reshape(res, res, res), level=0.5, spacing=[bound*2.0/(res-1)] * 3)
+    print(f"[vhull] grid {res}^3, bound {bound}, {poses.shape[0]} views, "
+          f"K={min_views}, occ_ratio={config.vhull_occ_ratio}: "
+          f"carving {t_carve:.2f}s, marching cubes {time.time()-t_start-t_carve:.2f}s")
 
     verts = verts-bound
     mesh = trimesh.Trimesh(vertices=verts,faces=faces,)
@@ -807,7 +829,6 @@ def computeVisualHull(masks, poses, bound, intrinsics, image_dims, outpath, min_
         maxId = np.argmax(np.bincount(ccIdx))
         mesh.update_faces(ccIdx==maxId)
         mesh.export(str(outpath)+"_clean.ply", file_type='ply')
-    # import pdb; pdb.set_trace()
     return mesh
 
 def orbit_poses(nposes, radii=[1], theta_range=[0, 2*np.pi/3], phi_range=[0, 2*np.pi], random=False):
@@ -880,6 +901,11 @@ class ActorsHQ(Dataset):
 
     def _load_renderings(self, config):
         """Load images from disk."""
+        if config.compute_normal_metrics:
+            raise NotImplementedError(
+                "compute_normal_metrics is not supported by the ActorsHQ loader: it has no "
+                "source of ground-truth normals. The loaders that read normals from disk "
+                "(e.g. Blender) still support it.")
         if config.render_path:
             print("Rendering test poses")
         meta_path = Path(config.meta_exp)
@@ -911,7 +937,6 @@ class ActorsHQ(Dataset):
         
 
         # visualize_poses(np.vstack([newposes,poses]), segcolors = np.vstack([np.array([[255,0,0]]*len(newposes)),np.array([[0,255,0]]*len(poses))]), mesh = None)
-        # import pdb; pdb.set_trace()
 
 
 
@@ -921,7 +946,6 @@ class ActorsHQ(Dataset):
         self.imageNames = names
         images = []        
         masks = []
-        normals = []
         imgpath = data_path / 'rgbs'
         maskpath = data_path / 'masks'
         trainpath = str(Path(config.exp_path) / 'trainimages')
@@ -931,26 +955,32 @@ class ActorsHQ(Dataset):
             fname =str((imgpath / frame)  / (frame+f'_rgb{int(timestamp):06d}.jpg'))
             mname =str((maskpath / frame)  / (frame+f'_mask{int(timestamp):06d}.png'))
             rgb = cv2.cvtColor(cv2.imread(fname),cv2.COLOR_BGR2RGB).astype('float')
-            try:
-                mask = cv2.imread(mname, cv2.IMREAD_UNCHANGED).astype('float')
-            except:
-                mask = np.ones_like(rgb[...,0])*255
-            mask = mask>200.0
+            # cv2.imread returns None for a missing or unreadable file rather than raising.
+            # A missing mask means "whole image is foreground", which is a legitimate case
+            # for unmasked datasets, but say so instead of swallowing it silently.
+            mask_raw = cv2.imread(mname, cv2.IMREAD_UNCHANGED)
+            if mask_raw is None:
+                print(f"No mask at {mname}; treating the whole image as foreground.")
+                mask = np.ones_like(rgb[...,0]) * 255
+            else:
+                mask = mask_raw.astype('float')
+            mask = mask > MASK_THRESHOLD
             rgb[mask == 0,...] = 255.0
             if self.split.value == "train":
                 cv2.imwrite(str(Path(trainpath) / frame) + '_rgb.png',rgb.astype('uint8'))
                 cv2.imwrite(str(Path(trainpath) / frame) + '_mask.png',mask.astype('uint8')*255)
 
-            # import pdb; pdb.set_trace()
-            get_norml = (compnormals.getNormals(rgb.astype('uint8')).astype('float')/255.0)*2.0-1.0
-            normals.append(get_norml)
             rgb = rgb/255.0
             images.append(rgb)
             masks.append(mask)
-        if (self.split.value == "train" or (self.split.value == "test" and config.vaxnerf)) and (config.vhull or config.vhull_vanilla or config.vhull_unitsph):
-            if not os.path.isfile(nearsandfars_path):
-                if not os.path.isfile(str(vhull_path)+'_clean.ply'):
+        use_vhull = config.vhull or config.vhull_vanilla or config.vhull_unitsph
+        cache_key_path = str(Path(config.exp_path) / 'vhull_settings.json')
+        cache_ok = vhull_cache_is_valid(cache_key_path, config)
+        if (self.split.value == "train" or (self.split.value == "test" and config.vaxnerf)) and use_vhull:
+            if not (cache_ok and os.path.isfile(nearsandfars_path)):
+                if not (cache_ok and os.path.isfile(str(vhull_path)+'_clean.ply')):
                     vhull_mesh = computeVisualHull(masks, poses,2.0, cam2pix, image_dims, vhull_path, min_views_visual_hull=config.vhullK,config=config)
+                    write_vhull_cache_key(cache_key_path, config)
                 else:
                     print("Loading visual hull")
                     vhull_mesh = trimesh.load(str(vhull_path)+'_clean.ply',process=False)
@@ -966,7 +996,10 @@ class ActorsHQ(Dataset):
             fars = [img[...,0]*0+self.far for img in images]
 
 
-        if self.split.value == "train":
+        # The interpolated training views below are rendered *from* the visual hull, so
+        # they only exist when a hull was built. Without this guard a run with all hull
+        # flags off -- the vanilla baseline -- dies loading a mesh that was never written.
+        if self.split.value == "train" and use_vhull:
             from scipy.spatial.transform import Rotation
             from scipy.spatial.transform import Slerp
             intset = set()
@@ -980,7 +1013,6 @@ class ActorsHQ(Dataset):
             newposes = []
             numposesperpair = 1
             for i,j in intset:
-                # import pdb; pdb.set_trace()
                 key_rots = Rotation.from_matrix(poses[[i,j],:3,:3])
                 key_times = [0.0,1.0]
                 slerp = Slerp(key_times, key_rots)
@@ -1001,13 +1033,12 @@ class ActorsHQ(Dataset):
             newintrinsics = []
             newheights = []
             newwidths = []
-            newnormals = []
             intrinsic = torch.from_numpy(allintrinsics[0]).float()
             img_dims = torch.from_numpy(allimgdims[0]).float()
             camnum = 0
             for camnum in range(newposes.shape[0]):
                 pose = torch.from_numpy(newposes[camnum]).float()
-                i,j = torch.meshgrid(torch.arange(img_dims[0]), torch.arange(img_dims[1]))
+                i,j = torch.meshgrid(torch.arange(img_dims[0]), torch.arange(img_dims[1]), indexing='ij')
                 zs = torch.ones_like(i)
                 points = torch.stack((i, j, zs), dim=-1).to(dtype=torch.float32)
                 directions = points @ intrinsic.inverse().transpose(1, 0)
@@ -1028,7 +1059,6 @@ class ActorsHQ(Dataset):
                 newintrinsics.append(allintrinsics[0])
                 newheights.append(image_dims[0][1])
                 newwidths.append(image_dims[0][0])
-                newnormals.append(normals[0]*0-1)
                 # cv2.imwrite(f'{camnum}_mask.png',mask.numpy().astype('uint8')*255)
                 # camnum += 1
                 # cv2.imwrite(str(Path(config.exp_path) / 'newmask' / cimname) + '_mask.png',mask.numpy().astype('uint8')*255)
@@ -1037,7 +1067,6 @@ class ActorsHQ(Dataset):
             images = images + newimgs
             image_height = np.hstack([image_height,newheights])
             image_width = np.hstack([image_width,newwidths])
-            normals = normals + newnormals
             cam2pix = np.vstack([cam2pix,newintrinsics])
             cidx = len(nears)
             for ii in range(len(newposes)):
@@ -1049,7 +1078,6 @@ class ActorsHQ(Dataset):
         self.nears = nears
         self.fars = fars
         self.images = images
-        self.normals = normals
         self.masks = masks
         self.height, self.width = image_height,image_width
         self.camtoworlds = poses
@@ -1070,7 +1098,6 @@ class ActorsHQ(Dataset):
             self.nears = [nears[camidx] for id in range(orbit_cams.shape[0])]
             self.fars =  [fars[camidx] for id in range(orbit_cams.shape[0])]
             self.images = [images[camidx] for id in range(orbit_cams.shape[0])]
-            self.normals = [normals[camidx] for id in range(orbit_cams.shape[0])]
             self.masks = [masks[camidx] for id in range(orbit_cams.shape[0])]
             self.height, self.width = [image_height[camidx] for id in range(orbit_cams.shape[0])],[image_width[camidx] for id in range(orbit_cams.shape[0])]
             self.camtoworlds = orbit_cams
@@ -1143,11 +1170,9 @@ class ActorsHQ(Dataset):
         # print("687: " + str(cam_idx))
         # sys.stdout.flush() 
         # if not self.split == utils.DataSplit.TRAIN:
-        #     import pdb; pdb.set_trace()
         if 1: #not self.render_path:
             if (not isinstance(cam_idx, list)) and (not isinstance(cam_idx, np.ndarray)):
                 batch['rgb']= self.images[cam_idx][pix_y_int,pix_x_int]
-                batch['normals'] = self.normals[cam_idx][pix_y_int,pix_x_int]
                 batch['mask'] = self.masks[cam_idx][pix_y_int,pix_x_int]
                 batch['near']= self.nears[cam_idx][pix_y_int,pix_x_int]
                 batch['far']= self.fars[cam_idx][pix_y_int,pix_x_int]
@@ -1162,15 +1187,10 @@ class ActorsHQ(Dataset):
                 cam_idx_sq = cam_idx.squeeze() #squeeze(-1).squeeze(-1)
                 pix_y_int_sq = pix_y_int #.squeeze()
                 pix_x_int_sq = pix_x_int #.squeeze()
-                # import pdb; pdb.set_trace()
                 batch['rgb'] = np.stack([self.images[cam_idx_sq[idx]][pix_y_int_sq[idx], pix_x_int_sq[idx]] for idx in range(0,cam_idx_sq.shape[0])],axis=0)
-                # import pdb; pdb.set_trace()
                 batch['rgb']= batch['rgb'].reshape([*pix_x_int_sq.shape,3])
                 batch['mask'] = np.stack([self.masks[cam_idx_sq[idx]][pix_y_int_sq[idx], pix_x_int_sq[idx]] for idx in range(0,cam_idx_sq.shape[0])],axis=0)
                 batch['mask']= batch['mask'].reshape([*pix_x_int_sq.shape,1])
-
-                batch['normals'] = np.stack([self.normals[cam_idx_sq[idx]][pix_y_int_sq[idx], pix_x_int_sq[idx]] for idx in range(0,cam_idx_sq.shape[0])],axis=0)
-                batch['normals']= batch['normals'].reshape([*pix_x_int_sq.shape,3])
 
                 batch['near'] = np.stack([self.nears[cam_idx_sq[idx]][pix_y_int_sq[idx], pix_x_int_sq[idx]] for idx in range(0,cam_idx_sq.shape[0])],axis=0)
                 batch['near']= batch['near'].reshape([*pix_x_int_sq.shape,1])
@@ -1185,8 +1205,6 @@ class ActorsHQ(Dataset):
 
         if self._load_disps:
             batch['disps'] = self.disp_images[cam_idx, pix_y_int, pix_x_int]
-        # if self._load_normals:
-        #     batch['normals'] = self.normal_images[cam_idx, pix_y_int, pix_x_int]
         #     batch['alphas'] = self.alphas[cam_idx, pix_y_int, pix_x_int]
         return {k: torch.from_numpy(v.copy()).float() if v is not None else None for k, v in batch.items()}
 
@@ -1197,7 +1215,6 @@ class ActorsHQ(Dataset):
         # Batch/patch sampling parameters.
         # self._patch_size = 2
         num_patches = self._batch_size // self._patch_size ** 2
-        # import pdb; pdb.set_trace()
         # Random camera indices.
         if self._batching == utils.BatchingMethod.ALL_IMAGES:
             cam_idx = np.random.randint(0, self._n_examples, (num_patches, 1, 1))
@@ -1233,7 +1250,7 @@ class ActorsHQ(Dataset):
 
     def generate_ray_batch(self, cam_idx: int):
         """Generate ray batch for a specified camera in the dataset."""
-        if 0:#self._render_spherical:
+        if False:  # spherical ray casting, disabled upstream; kept for reference
             camtoworld = self.camtoworlds[cam_idx]
             rays = camera_utils.cast_spherical_rays(
                 camtoworld, self.height[cam_idx], self.width[cam_idx], self.near, self.far)

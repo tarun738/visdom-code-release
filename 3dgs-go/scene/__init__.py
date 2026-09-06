@@ -172,7 +172,6 @@ class Scene:
         newposes = []
         numposesperpair = 1
         for i,j in intset:
-            # import pdb; pdb.set_trace()
             key_rots = Rotation.from_matrix(poses[[i,j],:3,:3])
             key_times = [0.0,1.0]
             slerp = Slerp(key_times, key_rots)
@@ -243,7 +242,6 @@ class Scene:
         meanT = meanT.float().to(Ts.device)
         newmasks = [torch.from_numpy(mask).float().to(Ts.device) for mask in newmasks]
         newcameras = []
-        # import pdb; pdb.set_trace()
         for i in range(len(goodposes)):
             cam_info = CameraInfo(
                 uid=f'{i+len(Ts):d}',
@@ -271,7 +269,6 @@ class Scene:
                         image_name=cam_info.image_name, uid=len(Ts)+i, 
                         data_device=self.train_cameras[1.0][0].data_device, white_background=args.white_background)
             newcameras.append(new_cam)
-            # import pdb; pdb.set_trace()
         self.inter_cameras = {}
         self.inter_cameras[1.0] = newcameras
 
@@ -361,7 +358,6 @@ def computeVisualHull(masks, poses, bound, intrinsics, min_views_visual_hull=2):
     # visualize_poses(poses.numpy())
     intrinsics = intrinsics.cpu().float()
     for intrinsic, pose, mask in zip(intrinsics, poses, masks):
-        # import pdb; pdb.set_trace()
         mask = mask.squeeze().cpu()
         image_dim = [mask.shape[1],mask.shape[0]]
         count += 1
@@ -410,7 +406,6 @@ def visualize_poses(poses, size=0.1, bound=2, mesh = None, segcolors=None):
 
         segs = np.array([[pos, a], [pos, b], [pos, c], [pos, d], [a, b], [b, c], [c, d], [d, a], [pos, o]])
         segs = trimesh.load_path(segs)
-        # import pdb; pdb.set_trace()
         if segcolors is not None:
             for e in segs.entities:
                 e.color = [segcolors[i][0],segcolors[i][1],segcolors[i][2],255]

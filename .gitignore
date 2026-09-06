@@ -5,10 +5,6 @@
 /3dgs-go/exps/
 /3dgs-go/exps_*/
 
-# Pretrained weights — too large for git; download separately (see README for source).
-/zipnerf/pretrained/**/checkpoints/
-/zipnerf/pretrained/**/*.pt
-
 # Python
 __pycache__/
 *.pyc

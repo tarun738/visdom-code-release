@@ -49,12 +49,20 @@ class Config:
     randomized: bool = True  # Use randomized stratified sampling.
     near: float = 0.02  # Near plane distance.
     far: float = 2  # Far plane distance.
-    vhull: bool = False  # If True, use visual hull for nears and fars
-    vhull_vanilla: bool = False  # If True, use visual hull for nears and fars
-    vhull_unitsph: bool = False  # If True, use visual hull for nears and fars
-    vhull_scc: bool = True  # If True, use visual hull for nears and fars
-    vhull_onlyvd: bool = False  # If True, use visual hull for nears and fars
-    vhullK: int = 3  # Minimum number of views required to include a voxel in the visual hull
+    vhull: bool = False  # Restrict ray sampling to a VisDom visual hull (our method).
+    vhull_vanilla: bool = False  # Ablation: plain silhouette visual hull, no visibility filter.
+    vhull_unitsph: bool = False  # Ablation: plain hull additionally clipped to the unit sphere.
+    vhull_scc: bool = True  # Keep only the largest connected component of the hull mesh.
+    vhull_onlyvd: bool = False  # Ablation: visibility filter alone, ignoring silhouettes.
+    # K from the paper: a voxel is kept only if at least this many views observe it,
+    # capped at the number of training views.
+    vhullK: int = 3
+    # Keep a voxel when occupancy votes >= this * visibility votes. Vote counts are
+    # integers and occupancy <= visibility, so a value of 0.95 only differs from 1.0 once
+    # a voxel is seen by 20 or more views; below that it is equivalent to requiring all.
+    vhull_occ_ratio: float = 0.95
+    vhull_res: int = 512  # Side length of the carving voxel grid.
+    vhull_bound: float = -1.0  # Half-extent of the carving grid; <= 0 uses the call-site default.
     mask_dilate: int = 0  # If > 0, dilate the input masks by this many pixels when computing the visual hull.
     vaxnerf: bool = False  # If True, use visual hull for nears and fars
     vaxnerf_vhull_eval: bool = True  # If True, use visual hull for nears and fars
@@ -190,7 +198,6 @@ def load_config():
     gin.parse_config_files_and_bindings(
         flags.FLAGS.gin_configs, flags.FLAGS.gin_bindings, skip_unknown=True)
     config = Config()
-    # import pdb; pdb.set_trace()
     if 1: #config.meta_exp == '':
         dataset_splits_dir = Path(__file__).resolve().parents[2] / 'datasets' / 'dataset_splits'
         config.meta_exp = dataset_splits_dir / Path(config.meta_exp)

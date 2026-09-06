@@ -7,8 +7,8 @@
 # cam=6,9 settings from GaussianObject/run_omni_vd69.sh ("om69"):
 #   same vhull_reso/train_res/sh_degree, but lambda_silhouette=0.1,
 #   lambda_silhouette_interpCams=0.01 (matching mip360/actorshq).
-DATA_DIR=<path to dataset>
-OUT_DIR=exps_better69
+DATA_DIR="<path to dataset>"   # edit me
+OUT_DIR=exps
 scenes="backpack_016 box_043 broccoli_003 corn_007 dinosaur_006 flower_pot_007 gloves_009_1080 guitar_002 hamburger_012 picnic_basket_009 pineapple_013 sandwich_003 suitcase_006 timer_010_1080 toy_plane_005 toy_truck_037 vase_012"
 
 # for s in $scenes

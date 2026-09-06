@@ -2,7 +2,7 @@
 # ActorsHQ, first stage only. Settings from GOActHQ/run_act_vd.sh:
 #   vhull_reso=1, train_res=1 (native resolution, no downsampling), sh_degree=3,
 #   lambda_silhouette=0.1, lambda_silhouette_interpCams=0.01.
-DATA_DIR=<path to dataset>
+DATA_DIR="<path to dataset>"   # edit me
 OUT_DIR=exps
 actors="Actor01 Actor02 Actor03 Actor04 Actor05 Actor06 Actor07 Actor08"
 

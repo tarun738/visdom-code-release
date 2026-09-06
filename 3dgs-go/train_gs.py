@@ -124,12 +124,6 @@ def training(args, dataset, opt, pipe, testing_iterations, saving_iterations, ch
         if interpCams:
             render_pkg_interp = render(interp_cam, gaussians, pipe, bg)
             loss_interp = -((1-interp_cam.mask)*torch.log(1 - render_pkg_interp["rendered_alpha"]+1e-5)).mean()
-            # import pdb; pdb.set_trace()
-            if 0:
-                import cv2
-                cv2.imwrite("testgtm.jpg", (255*interp_cam.mask).squeeze().cpu().numpy().astype('uint8'))
-                
-                cv2.imwrite("testrendm.jpg", (255*render_pkg_interp["rendered_alpha"]).detach().squeeze().cpu().numpy().astype('uint8'))
             loss += opt.lambda_silhouette_interpCams * loss_interp
 
         loss.backward()

@@ -1,4 +1,4 @@
-DATA_DIR=<path to dataset>
+DATA_DIR="<path to dataset>"   # edit me
 actors="Actor01 Actor02 Actor03 Actor04 Actor05 Actor06 Actor07 Actor08"
 
 for camcount in 005_00 008_00 012_00

@@ -255,7 +255,6 @@ def readColmapSceneInfo(path, images, eval, llffhold=8, extra_opts=None):
         test_cam_infos = [train_cam_infos[i] for i in ids_test]
         train_cam_infos = [train_cam_infos[i] for i in ids]
         print("Sparse view, only {} images are used for training, others are used for eval.".format(len(ids)))
-        # import pdb; pdb.set_trace()
     if hasattr(extra_opts, 'use_dust3r') and extra_opts.use_dust3r:
         print('use dust3r estimated camera poses...')
         if hasattr(extra_opts, 'dust3r_json') and extra_opts.dust3r_json:

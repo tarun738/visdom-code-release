@@ -76,7 +76,7 @@ def get_visual_hull(N, scale, Ks, Ts, original_images, original_masks):
 
     for h_id in trange(N):
         i, j = torch.meshgrid(torch.linspace(xs, xe, N).cuda(),
-                              torch.linspace(ys, ye, N).cuda())
+                              torch.linspace(ys, ye, N).cuda(), indexing='ij')
         i, j = i.t(), j.t()
         pts = torch.stack([i, j, torch.ones_like(i).cuda()], -1)
         pts[...,2] = h_id / N * (ze - zs) + zs # 100, 100, 3

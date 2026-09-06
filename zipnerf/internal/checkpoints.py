@@ -13,13 +13,7 @@ def restore_checkpoint(
 ):
     dirs = glob.glob(os.path.join(checkpoint_dir, "*"))
     dirs.sort()
-    if 0:
-        for d in dirs:
-            if d.endswith("002000"):
-                path = d
-                break
-    else:
-        path = dirs[-1] if len(dirs) > 0 else None
+    path = dirs[-1] if len(dirs) > 0 else None
     if path is None:
         if logger is not None:
             logger.info("Checkpoint does not exist. Starting a new training run.")

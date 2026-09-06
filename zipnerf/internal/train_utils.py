@@ -129,7 +129,6 @@ def compute_data_loss(batch, renderings, config):
                 normalized_normals = ref_utils.l2_normalize(rendering['normals_pred'][mask_seen,:3])
                 normal_mae = (1e-2)*ref_utils.compute_weighted_mae(weights, normalized_normals,
                                                             normalized_normals_gt)*torch.pi/180.0
-                # import pdb; pdb.set_trace()
                 normal_losses.append( (1e-2)*(weights*(normalized_normals_gt-normalized_normals)**2).mean())
                 # normal_losses.append( normal_mae )
             else:
@@ -198,7 +197,6 @@ def anti_interlevel_loss(ray_history, config):
         w_s = torch.diff(cdf_interp, dim=-1)
 
         loss_anti_interlevel += ((w_s - wp).clamp_min(0) ** 2 / (wp + 1e-5)).mean()
-        # import pdb; pdb.set_trace()
     return config.anti_interlevel_loss_mult * loss_anti_interlevel
 
 

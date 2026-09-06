@@ -2,7 +2,6 @@ Config.exp_name = 'test'
 Config.dataset_loader = 'actorshq'
 Config.near = 0
 Config.far = 5
-Config.factor = 0
 Config.hash_decay_mults = 10
 Config.factor = 1
 Config.batch_size = 8192

@@ -8,7 +8,8 @@ base 3DGS implementation, general usage, and citation.
 ## Install
 
 Requires an existing PyTorch + CUDA install with a matching `nvcc` toolchain (needed to build
-`diff-gaussian-rasterization` and `simple-knn` from source).
+`diff-gaussian-rasterization` and `simple-knn` from source). Our results were produced with
+Python 3.11.11 and torch 2.6.0 built against CUDA 11.8; `requirements.txt` pins that set.
 
 ```
 pip install -r requirements.txt
@@ -39,3 +40,21 @@ script at your local copy by editing its `DATA_DIR=<path to dataset>` line:
 Each calls `runone_exp_vhull.sh`: visual hull -> coarse 3DGS -> render (first stage only, no
 leave-one-out / LoRA fine-tuning / Gaussian repair), matching the settings recovered from our
 original experiment logs.
+
+## What this release does not run
+
+This codebase carries the full GaussianObject lineage, but our scripts exercise only the
+first stage. The following ship and are importable, yet nothing above invokes them:
+
+| Component | Purpose upstream |
+|---|---|
+| `leave_one_out_stage1.py`, `leave_one_out_stage2.py` | leave-one-out training for the repair model |
+| `train_lora.py`, `train_repair.py` | LoRA fine-tuning and Gaussian repair |
+| `pred_poses.py`, `pred_poses_mast3r.py` | pose prediction from DUSt3R / MASt3R |
+| `ldm/`, `cldm/`, `annotator/`, `threestudio/` | diffusion and ControlNet stack for the repair model |
+| `submodules/CLIP`, `submodules/segment-anything`, `submodules/minLoRA` | dependencies of the above |
+
+They are kept so the pipeline stays close to upstream and the later stages remain
+available, but they are why `requirements.txt` is as large as it is. If you only want to
+reproduce our numbers, the first stage needs `diff-gaussian-rasterization`, `simple-knn`,
+`open3d`, `camtools`, `trimesh` and the core numerics, and nothing else in that list.
